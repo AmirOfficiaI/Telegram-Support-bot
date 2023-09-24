@@ -51,7 +51,7 @@ def start(m):
     # Sending a message with the reply keyboard markup
     bot.send_message(chat_id=m.chat.id, text=f"Hello *{m.from_user.first_name}*", reply_markup=markup, parse_mode="MarkdownV2")
 
-# Handling the 'پشتیبانی' button click event
+# Handling the 'Support 👨🏻‍💻' button click event
 @bot.message_handler(func= lambda m: m.text== "Support 👨🏻‍💻")
 def sup(m):
     # Sending a message to the user to send their message
@@ -74,7 +74,7 @@ def sup_text(m):
     # Deleting the state from the 'Support.text' state group
     bot.delete_state(user_id=m.from_user.id, chat_id=m.chat.id)
 
-# Handling the callback query when the 'پاسخ' button is clicked
+# Handling the callback query when the 'answer' button is clicked
 @bot.callback_query_handler(func= lambda call: True)
 def answer(call):
     # Sending a message with instructions for the support agent to reply
