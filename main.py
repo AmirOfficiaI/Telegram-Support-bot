@@ -38,13 +38,13 @@ def escape_special_characters(text):
     special_characters = r"([\*\_\[\]\(\)\~\`\>\#\+\-\=\|\{\}\.\!])"
     return re.sub(special_characters, r'\\\1', text)
 
-# Handling start command 
+# Handling start command
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Support 👨🏻‍💻")
- 
-    bot.send_message(chat_id=m.chat.id, text=f"Hello *{m.from_user.first_name}*", reply_markup=markup, parse_mode="MarkdownV2")
+
+    bot.send_message(chat_id=m.chat.id, text=f"Hello <b>{m.from_user.first_name}</b>", reply_markup=markup, parse_mode="HTML")
 
 # Handling the 'Support 👨🏻‍💻' button click event
 @bot.message_handler(func= lambda m: m.text== "Support 👨🏻‍💻")
@@ -57,8 +57,8 @@ def sup(m):
 def sup_text(m):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text="answer", callback_data=m.from_user.id))
- 
-    bot.send_message(chat_id=SUPPORT_ID, text=f"Recived a message from ```{m.from_user.id}``` with username @{m.from_user.username}:\nMessage text:\n\n*{escape_special_characters(m.text)}*", reply_markup=markup, parse_mode="MarkdownV2")
+
+    bot.send_message(chat_id=SUPPORT_ID, text=f"Recived a message from <code>{m.from_user.id}</code> with username @{m.from_user.username}:\nMessage text:\n\n<b>{escape_special_characters(m.text)}</b>", reply_markup=markup, parse_mode="HTML")
 
     bot.send_message(chat_id=m.chat.id, text="Your message was sent!")
 
@@ -69,7 +69,7 @@ def sup_text(m):
 # Handling the callback query when the 'answer' button is clicked
 @bot.callback_query_handler(func= lambda call: True)
 def answer(call):
-    bot.send_message(chat_id=call.message.chat.id, text=f"Send your answer to ```{call.data}```:", parse_mode="MarkdownV2")
+    bot.send_message(chat_id=call.message.chat.id, text=f"Send your answer to <code>{call.data}</code>:", parse_mode="HTML")
 
     chat_ids.append(int(call.data))
 
@@ -81,7 +81,7 @@ def answer_text(m):
     chat_id = chat_ids[-1]
 
     if chat_id in texts:
-        bot.send_message(chat_id=chat_id, text=f"Your message:\n_{escape_special_characters(texts[chat_id])}_\n\nSupport answer:\n*{escape_special_characters(m.text)}*", parse_mode="MarkdownV2")
+        bot.send_message(chat_id=chat_id, text=f"Your message:\n<i>{escape_special_characters(texts[chat_id])}</i>\n\nSupport answer:\n<b>{escape_special_characters(m.text)}</b>", parse_mode="HTML")
         bot.send_message(chat_id=m.chat.id, text="Your answer was sent!")
 
         del texts[chat_id]
