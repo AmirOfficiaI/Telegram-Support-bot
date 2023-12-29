@@ -12,22 +12,22 @@
 # This is a Python code for a Telegram bot that provides support services. Here's the breakdown:
 
 # Importing necessary libraries
+import re
 import telebot
-from telebot import types
+from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery, ForceReply
 from telebot.storage import StateMemoryStorage
 from telebot.handler_backends import State, StatesGroup
 from telebot import custom_filters
-import re
+from expiringdict import ExpiringDict
 
 from config import BOT_TOKEN, SUPPORT_ID
 
 state_storage = StateMemoryStorage()
 
-bot = telebot.TeleBot(token=BOT_TOKEN, state_storage=state_storage)
+bot = telebot.TeleBot(token=BOT_TOKEN, state_storage=state_storage, parse_mode="HTML")
 
-# Declaring two global lists to keep track of chat ids and texts
-chat_ids = []
-texts = {}
+# Declaring a global lists to keep track of chat ids and texts
+texts = ExpiringDict(max_len=1000, max_age_seconds=2592000)
 
 class Support(StatesGroup):
     text = State()
@@ -40,25 +40,26 @@ def escape_special_characters(text):
 
 # Handling start command
 @bot.message_handler(commands=['start'])
-def start(m):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+def start(m: Message):
+    print(m.reply_to_message)
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Support 👨🏻‍💻")
 
-    bot.send_message(chat_id=m.chat.id, text=f"Hello <b>{m.from_user.first_name}</b>", reply_markup=markup, parse_mode="HTML")
+    bot.send_message(chat_id=m.chat.id, text=f"Hello <b>{m.from_user.first_name}</b>", reply_markup=markup)
 
 # Handling the 'Support 👨🏻‍💻' button click event
 @bot.message_handler(func= lambda m: m.text== "Support 👨🏻‍💻")
-def sup(m):
+def sup(m: Message):
     bot.send_message(chat_id=m.chat.id, text="Send your message to support:")
-    bot.set_state(user_id=m.from_user.id, state=Support.text, chat_id=m.chat.id)
+    bot.set_state(user_id=m.from_user.id, state=Support.text, chat_id=m.chat.id)    
 
 # Handling the user's first message which is saved in 'Support.text' state
 @bot.message_handler(state=Support.text)
-def sup_text(m):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="answer", callback_data=m.from_user.id))
+def sup_text(m: Message):
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(text="answer", callback_data="answer"))
 
-    bot.send_message(chat_id=SUPPORT_ID, text=f"Recived a message from <code>{m.from_user.id}</code> with username @{m.from_user.username}:\nMessage text:\n\n<b>{escape_special_characters(m.text)}</b>", reply_markup=markup, parse_mode="HTML")
+    bot.send_message(chat_id=SUPPORT_ID, text=f"Recived a message from <code>{m.from_user.id}</code> with username @{m.from_user.username}:\n\nMessage text:\n<b>{escape_special_characters(m.text)}</b>", reply_markup=markup)
 
     bot.send_message(chat_id=m.chat.id, text="Your message was sent!")
 
@@ -67,29 +68,38 @@ def sup_text(m):
     bot.delete_state(user_id=m.from_user.id, chat_id=m.chat.id)
 
 # Handling the callback query when the 'answer' button is clicked
-@bot.callback_query_handler(func= lambda call: True)
-def answer(call):
-    bot.send_message(chat_id=call.message.chat.id, text=f"Send your answer to <code>{call.data}</code>:", parse_mode="HTML")
-
-    chat_ids.append(int(call.data))
+@bot.callback_query_handler(func= lambda call: call.data == "answer")
+def answer(call: CallbackQuery):
+    pattern = r"Recived a message from \d+"
+    user = re.findall(pattern=pattern, string=call.message.text)[0].split()[4]
+    
+    bot.send_message(chat_id=call.message.chat.id, text=f"Send your answer to <code>{user}</code>:", reply_markup=ForceReply())
 
     bot.set_state(user_id=call.from_user.id, state=Support.respond, chat_id=call.message.chat.id)
 
 # Handling the support agent's reply message which is saved in 'Support.respond' state
-@bot.message_handler(state=Support.respond)
-def answer_text(m):
-    chat_id = chat_ids[-1]
+@bot.message_handler(state=Support.respond, func= lambda m: m.reply_to_message.text.startswith("Send your answer to"))
+def answer_text(m: Message):
+    pattern = r"Send your answer to \d+"
+    user = int(re.findall(pattern=pattern, string=m.reply_to_message.text)[0].split()[4])
 
-    if chat_id in texts:
-        bot.send_message(chat_id=chat_id, text=f"Your message:\n<i>{escape_special_characters(texts[chat_id])}</i>\n\nSupport answer:\n<b>{escape_special_characters(m.text)}</b>", parse_mode="HTML")
-        bot.send_message(chat_id=m.chat.id, text="Your answer was sent!")
+    try:
+        try:
+            user_message = texts[user]
+            bot.send_message(chat_id=user, text=f"Your message:\n<i>{escape_special_characters(user_message)}</i>\n\nSupport answer:\n<b>{escape_special_characters(m.text)}</b>")
+            bot.send_message(chat_id=m.chat.id, text="Your answer was sent!")
 
-        del texts[chat_id]
-        chat_ids.remove(chat_id)
-    else:
-        bot.send_message(chat_id=m.chat.id, text="Something went wrong. Please try again...")
+            del texts[user]
+            bot.delete_state(user_id=m.from_user.id, chat_id=m.chat.id)
+        
+        except:
+            bot.send_message(chat_id=user, text=f"Support answer:\n<b>{escape_special_characters(m.text)}</b>")
+            bot.send_message(chat_id=m.chat.id, text="Your answer was sent!")
 
-    bot.delete_state(user_id=m.from_user.id, chat_id=m.chat.id)
+            bot.delete_state(user_id=m.from_user.id, chat_id=m.chat.id)
+        
+    except Exception as e:
+        bot.send_message(chat_id=m.chat.id, text=f"Something goes wrong...\n\nException:\n<code>{e}</code>")
 
 # Starting the bot and adding the state filter as a custom filter
 if __name__ == '__main__':
